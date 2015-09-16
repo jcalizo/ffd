@@ -1,0 +1,103 @@
+# ff.yaml
+# This .yaml file contains all configuration info required by the ffd engine.
+input:
+    salaries:
+        filename: /Users/jcalizo/Devel/ffd/in/fanduel_data.csv
+        type: fanduel
+    projections:
+        filename: /Users/jcalizo/Devel/ffd/in/fanduel_data.csv
+        type: fanduel
+filters:
+    QB:
+        min: 5500
+        max: 12000
+        exclude_injury:
+            probable: 0
+            doutful: 1
+            questionable: 1
+            out: 1
+            injured_reserve: 1
+        output:
+            min_base_projected: 15
+            min_base_ppd: 0.002
+    RB:
+        min: 5000
+        max: 10000
+        exclude_injury:
+            probable: 0
+            doutful: 1
+            questionable: 1
+            out: 1
+            injured_reserve: 1
+        output:
+            min_base_projected: 10
+            min_base_ppd: 0.002
+    WR:
+        min: 5000
+        max: 10000
+        exclude_injury:
+            probable: 0
+            doutful: 1
+            questionable: 1
+            out: 1
+            injured_reserve: 1
+        output:
+            min_base_projected: 10
+            min_base_ppd: 0.001
+    TE:
+        min: 2000
+        max: 10000
+        exclude_injury:
+            probable: 0
+            doutful: 1
+            questionable: 1
+            out: 1
+            injured_reserve: 1
+        output:
+            min_base_projected: 4
+            min_base_ppd: 0
+    K:
+        min: 3000
+        max: 5500
+        exclude_injury:
+            probable: 0
+            doutful: 1
+            questionable: 1
+            out: 1
+            injured_reserve: 1
+        output:
+            min_base_projected: 6
+            min_base_ppd: 0
+    D:
+        min: 3000
+        max: 5500
+        exclude_injury:
+            probable: 0
+            doutful: 1
+            questionable: 1
+            out: 1
+            injured_reserve: 1
+        output:
+            min_base_projected: 0
+            min_base_ppd: 0
+rules:
+    lineup:
+        QB:
+            count: 1
+        RB:
+            count: 2
+        WR:
+            count: 3
+        TE:
+            count: 1
+        K:
+            count: 1
+        D:
+            count: 1
+    cap: 60000
+models:
+    single:
+    team:
+anal:
+    max_lineups: 100
+    top_lineups: 5
