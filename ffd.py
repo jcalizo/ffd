@@ -104,37 +104,31 @@ def anal_lineups(data_df, lineup_df, fom, anal_info):
     trimmed_df = lineup_df.head(anal_info["max_lineups"])
 
     stats_df = pd.DataFrame()
-    # build a dictionary of statistics for each player as key, then generate
-    # data frame with one player per row
-    stats_dict = {}
+
+    # transform data frame into a dictionary keyed by player name
+    # todo: we already used this earlier. should have a class since the data
+    # frame and dictionary representations are both suited to different tasks
+    data_df["Frequency"] = 0
+    player_dict = data_df.set_index("Name").T.to_dict()
 
     # compute frequency for each player
     # todo: don't hardcode position list
     for pos in ["QB_1", "RB_1", "RB_2", "WR_1", "WR_2", "WR_3", "TE_1", "K_1", "D_1"]:
         hist = trimmed_df[pos].value_counts().to_dict()
         for player in hist:
-            # lazy!
-            # todo: seriously, use classes.
-            if player not in stats_dict:
-                stats_dict[player] = {}
-                stats_dict[player]["position"] = pos.split("_")[0]
-
             # some players can show up in different positions (e.g., WR1, WR2)
             # use count as normalization factor. this is relative frequency,
             # not absolute frequency
-            if "frequency" not in stats_dict[player]:
-                stats_dict[player]["frequency"] = hist[player] / float(anal_info["max_lineups"])
-            else:
-                stats_dict[player]["frequency"] += hist[player] / float(anal_info["max_lineups"])
+            player_dict[player]["Frequency"] += hist[player] / float(anal_info["max_lineups"])
 
     # for each player (key), reformat dictionary to be data frame compliant
     # todo: a custom class can override these transform methods
-    for player in stats_dict:
+    for player in player_dict:
         player_info = {
             "Name": player
         }
-        for stat in stats_dict[player]:
-            player_info[stat] = stats_dict[player][stat]
+        for stat in player_dict[player]:
+            player_info[stat] = player_dict[player][stat]
         stats_df = stats_df.append(player_info, ignore_index=True)
 
     return {"trimmed_df": trimmed_df, "stats_df": stats_df}
@@ -147,14 +141,14 @@ def report_data(data_df, anal_res, fom, anal_info):
 
     print(stats_df)
 
-    print("\n\nRelative frequencies (based on top " + str(anal_info["max_lineups"]) + "lineups):")
-    stats_df.sort("frequency", ascending=False, inplace=True)
+    print("\n\nRelative frequencies (based on top " + str(anal_info["max_lineups"]) + " lineups):")
+    stats_df.sort("Frequency", ascending=False, inplace=True)
     for pos in positions:
         print(pos + ":")
-        df = stats_df[stats_df["position"] == pos]
+        df = stats_df[stats_df["Position"] == pos]
         for player_info in df.to_dict("records"):
             print("\t" + player_info["Name"] + ": " +
-                str(player_info["frequency"]))
+                str(player_info["Frequency"]))
 
     trimmed_df = trimmed_df.head(anal_info["top_lineups"])
     print("\n\nTop " + str(anal_info["top_lineups"]) + " lineups:")
@@ -198,7 +192,7 @@ def filter_df(df, filters):
 
     return df[filtered_idx]
 
-def verify_lineup(df, rules, lineup):
+def verify_lineup(player_dict, rules, lineup):
     lineup_dict = {
         "QB_1": lineup[0][0],
         "RB_1": lineup[1][0],
@@ -214,13 +208,12 @@ def verify_lineup(df, rules, lineup):
     }
 
     valid_lineup = 1
-    for name in lineup_dict:
-        if name == "Total Salary" or name == "Total Base Projection":
+    for pos in lineup_dict:
+        if pos == "Total Salary" or pos == "Total Base Projection":
             continue
-        player_salary = df[df["Name"] == lineup_dict[name]].Salary
-        lineup_dict["Total Salary"] += player_salary.values[0]
-        player_base_projection = df[df["Name"] == lineup_dict[name]]["Base Projection"]
-        lineup_dict["Total Base Projection"] += player_base_projection.values[0]
+        name = lineup_dict[pos]
+        lineup_dict["Total Salary"] += player_dict[name]["Salary"]
+        lineup_dict["Total Base Projection"] += player_dict[name]["Base Projection"]
         # todo: break immediately if over salary cap
         if lineup_dict["Total Salary"] > rules["cap"]:
             valid_lineup = 0
@@ -228,7 +221,7 @@ def verify_lineup(df, rules, lineup):
 
     if valid_lineup == 1:
         # create data frame with dummy index (ignored by concat)
-        result = pd.DataFrame(lineup_dict, index=[0])
+        result = lineup_dict
     else:
         result = None
 
@@ -252,6 +245,7 @@ def gen_lineup_df(df, rules):
         #print(pos + " combo count: " + str(len(combos[pos])))
 
     # todo: don't hardcode this
+    # todo: use an optimized cartesian product implementation. can numpy do this?
     lineups = list(it.product(
         combos["QB"],
         combos["RB"],
@@ -260,6 +254,9 @@ def gen_lineup_df(df, rules):
         combos["K"],
         combos["D"])
     )
+
+    # transform data frame into a dictionary keyed by player name
+    player_dict = df.set_index("Name").T.to_dict()
 
     # determine which lineups are valid
     # use progress bar for real time status feedback
@@ -276,11 +273,11 @@ def gen_lineup_df(df, rules):
     )
     print("\n")
     verify_lineup.bar.start()
-    frames = [ verify_lineup(df, rules, lineup) for lineup in lineups ]
+    lineup_list = [ verify_lineup(player_dict, rules, lineup) for lineup in lineups ]
     verify_lineup.bar.finish()
 
-    # concatenate all lineup data (None's are silently ignored)
-    lineup_df = pd.concat(frames, ignore_index=True)
+    # concatenate all lineup data (remove Nones)
+    lineup_df = pd.DataFrame(filter(None,lineup_list))
 
     return lineup_df
 
