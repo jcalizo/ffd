@@ -107,10 +107,31 @@ def compute_derived_data(df):
     return df
 
 def tune_player_projections(df, models=None):
-    # todo: define input format for models once they're actually supported
+    # example model input format
+    # models = {
+    #     <parameter_key>: {
+    #         <parameter_value>: {
+    #             'b1': <B1>,
+    #             'b0': <B0>
+    #         }
+    #     },
+    #     ...
+    # }
+    #
+    # parameter_key: column in data frame (e.g., Position)
+    # parameter_value: value for this player (e.g., RB)
+    # B1, B0: model coefficients
+    #
+    # this implementation stacks the absolute delta from each model. each model
+    # is first-order and independent.
+    df["Model Offset"] = 0
 
-    # still in development. passthrough for now.
-    df["Modeled Projection"] = df["Base Projection"]
+    for key in models:
+        for val in models[key]:
+            print("Applying model for " + key + " = " + val)
+            df.loc[df[key] == val, "Model Offset"] += (df.loc[df[key] == val, "Base Projection"] * (models[key][val]["b1"] - 1) + models[key][val]["b0"])
+
+    df["Modeled Projection"] = df["Base Projection"] + df["Model Offset"]
     return df
 
 def tune_lineup_projections(df, models=None):
@@ -190,6 +211,9 @@ def filter_df(df, filters):
         pos_filter = ((df.Position == pos) & (df.Salary >= filters[pos]["min"]) & (df.Salary <= filters[pos]["max"]))
         pos_filter &= (df["Base Projection"] >= filters[pos]["output"]["min_base_projected"])
         pos_filter &= (df["Base PPD"] >= filters[pos]["output"]["min_base_ppd"])
+        pos_filter &= (df["Modeled Projection"] >= filters[pos]["output"]["min_modeled_projected"])
+        pos_filter &= (df["Modeled PPD"] >= filters[pos]["output"]["min_modeled_ppd"])
+
 
         # check optional filters
         if filters[pos]["exclude_injury"]["probable"] == 1:
@@ -357,13 +381,8 @@ if __name__ == "__main__":
             sys.exit(0)
 
     # generate other columns
+    # note that not all columns can be computed at this point
     data_df = compute_derived_data(data_df)
-
-    # filter data frame
-    # this is a pre-filter to remove "useless" entries (e.g., players on IR,
-    # third string QBs, etc.)
-    # really, this is just used to trim down the dataset to be more manageable.
-    data_df = filter_df(data_df, config_info["filters"])
 
     # apply per-player models
     # todo: models should be read from an input .yaml file, but currently, none
@@ -373,6 +392,12 @@ if __name__ == "__main__":
     # generate other columns (called again to generate any columns that are
     # dependent on the models
     data_df = compute_derived_data(data_df)
+
+    # filter data frame
+    # this is a pre-filter to remove "useless" entries (e.g., players on IR,
+    # third string QBs, etc.)
+    # really, this is just used to trim down the dataset to be more manageable.
+    data_df = filter_df(data_df, config_info["filters"])
 
     # build permutations, generate list of "valid" lineups
     # todo: currently, a "valid" lineup is only defined as a team that is under
