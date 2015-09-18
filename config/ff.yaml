@@ -4,9 +4,15 @@ input:
     salaries:
         filename: /Users/jcalizo/Devel/ffd/in/fanduel_data.csv
         type: fanduel
-    projections:
-        filename: /Users/jcalizo/Devel/ffd/in/fanduel_data.csv
-        type: fanduel
+    stats:
+        Base Projection:
+            filename: /Users/jcalizo/Devel/ffd/in/fantasypros_data.csv
+            type: fantasypros
+#            filename: /Users/jcalizo/Devel/ffd/in/fanduel_data.csv
+#            type: fanduel
+        Injury Status:
+            filename: /Users/jcalizo/Devel/ffd/in/fanduel_data.csv
+            type: fanduel
 filters:
     QB:
         min: 5500

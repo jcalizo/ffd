@@ -65,6 +65,32 @@ def read_fanduel_player_data(filename, player_info="all"):
 
     return df
 
+def read_fantasypros_player_data(filename, player_info="all"):
+    cols = ["Player Name"]
+    if player_info == "all":
+        player_info = ["Base Projection"]
+
+    # requested parameters don't always match column names
+    if "Base Projection" in player_info:
+        cols.append("fpts")
+
+    # read .csv file
+    df = pd.read_csv(filename, usecols=cols)
+
+    # use standard column names
+    df["Name"] = df["Player Name"]
+    df.pop("Player Name")
+
+    # some parameters are optional. just catch exceptions for parameters that
+    # weren't requested - it's simpler than checking player_info
+    try:
+        df["Base Projection"] = df["fpts"]
+        df.pop("fpts")
+    except:
+        pass
+
+    return df
+
 def compute_derived_data(df):
     # this function is called multiple times. some columns don't exist on the
     # first pass, so let's just cheat and catch exceptions for now
@@ -304,28 +330,31 @@ if __name__ == "__main__":
     # todo: make an input class
     # todo: will we need to support anything else?
     if config_info["input"]["salaries"]["type"] == "fanduel":
-        salary_df = read_fanduel_salaries(
+        data_df = read_fanduel_salaries(
             config_info["input"]["salaries"]["filename"]
         )
     else:
         print("Unsupported salary file.")
         sys.exit(0)
 
-    # import projections
+    # import stats, merging with salary data frame
     # todo: make an input class
-    # todo: add support for other sources
-    # todo: handle multiple sources simultaneously. maybe have an optional
-    # parameter specifying which columns to use from the given database
-    if config_info["input"]["projections"]["type"] == "fanduel":
-        projections_df = read_fanduel_player_data(
-            config_info["input"]["projections"]["filename"]
-        )
-    else:
-        print("Unsupported projections file.")
-        sys.exit(0)
-
-    # merge data frames
-    data_df = pd.merge(salary_df, projections_df)
+    # todo: if a file is used for multiple parameters, it will be accessed
+    # several times
+    for param in config_info["input"]["stats"]:
+        if config_info["input"]["stats"][param]["type"] == "fanduel":
+            data_df = pd.merge(data_df, read_fanduel_player_data(
+                config_info["input"]["stats"][param]["filename"],
+                param)
+            )
+        elif config_info["input"]["stats"][param]["type"] == "fantasypros":
+            data_df = pd.merge(data_df, read_fantasypros_player_data(
+                config_info["input"]["stats"][param]["filename"],
+                param)
+            )
+        else:
+            print("Unsupported " + param + " input source.")
+            sys.exit(0)
 
     # generate other columns
     data_df = compute_derived_data(data_df)
