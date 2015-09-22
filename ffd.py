@@ -18,6 +18,7 @@ import sys
 import itertools as it
 import pprint as pp
 import progressbar
+import re
 
 # standardize data frame
 def read_fanduel_salaries(filename):
@@ -32,7 +33,7 @@ def read_fanduel_salaries(filename):
 def read_fanduel_player_data(filename, player_info="all"):
     cols = ["First Name", "Last Name"]
     if player_info == "all":
-        player_info = ["Base Projection", "Injury Status"]
+        player_info = ["Base Projection", "Injury Status", "Team", "Opponent"]
 
     # requested parameters don't always match column names
     if "Base Projection" in player_info:
@@ -40,6 +41,12 @@ def read_fanduel_player_data(filename, player_info="all"):
 
     if "Injury Status" in player_info:
         cols.append("Injury Indicator")
+
+    if "Team" in player_info:
+        cols.append("Team")
+
+    if "Opponent" in player_info:
+        cols.append("Opponent")
 
     # read .csv file
     df = pd.read_csv(filename, usecols=cols)
@@ -54,6 +61,7 @@ def read_fanduel_player_data(filename, player_info="all"):
     try:
         df["Base Projection"] = df["FPPG"]
         df.pop("FPPG")
+        df["Base Projection Source"] = "Fanduel"
     except:
         pass
 
@@ -86,6 +94,7 @@ def read_fantasypros_player_data(filename, player_info="all"):
     try:
         df["Base Projection"] = df["fpts"]
         df.pop("fpts")
+        df["Base Projection Source"] = "FantasyPros"
     except:
         pass
 
@@ -108,15 +117,40 @@ def compute_derived_data(df):
 
 def tune_player_projections(df, models=None):
     # example model input format
-    # models = {
-    #     <parameter_key>: {
-    #         <parameter_value>: {
-    #             'b1': <B1>,
-    #             'b0': <B0>
-    #         }
+    # models = [
+    #     {
+    #         'cols': [
+    #             {
+    #                 'name': <parameter_key_0>,
+    #                 'value': <parameter_value_0>,
+    #                 'invert': 0
+    #             },
+    #             {
+    #                 'name': <parameter_key_1>,
+    #                 'value': <parameter_value_1>,
+    #                 'invert': 0
+    #             }
+    #         ],
+    #         'b1': 1,
+    #         'b0': 0
     #     },
-    #     ...
-    # }
+    #     {
+    #         'cols': [
+    #             {
+    #                 'name': <parameter_key_0>,
+    #                 'value': <parameter_value_0>,
+    #                 'invert': 0
+    #             },
+    #             {
+    #                 'name': <parameter_key_1>,
+    #                 'value': <parameter_value_1>,
+    #                 'invert': 0
+    #             }
+    #         ],
+    #         'b1': 1,
+    #         'b0': 0
+    #     }
+    # ]
     #
     # parameter_key: column in data frame (e.g., Position)
     # parameter_value: value for this player (e.g., RB)
@@ -126,19 +160,59 @@ def tune_player_projections(df, models=None):
     # is first-order and independent.
     df["Model Offset"] = 0
 
-    for key in models:
-        for val in models[key]:
-            print("Applying model for " + key + " = " + val)
-            df.loc[df[key] == val, "Model Offset"] += (df.loc[df[key] == val, "Base Projection"] * (models[key][val]["b1"] - 1) + models[key][val]["b0"])
+    if models is not None:
+        for model in models:
+            print("Applying model:")
+            pp.pprint(model)
+            # todo: any better way to do this?
+            first = 1
+            for col_filter in model["cols"]:
+                pp.pprint(col_filter)
+                idx = (df[col_filter["name"]] == col_filter["value"])
+                if col_filter["invert"] == 1:
+                    idx = -idx
+                if first == 1:
+                    first = 0
+                    df_filter = idx
+                else:
+                    df_filter &= idx
+            df.loc[df_filter, "Model Offset"] += \
+                (df.loc[df_filter, "Base Projection"] *
+                (model["b1"] - 1) +
+                model["b0"])
 
     df["Modeled Projection"] = df["Base Projection"] + df["Model Offset"]
     return df
 
 def tune_lineup_projections(df, models=None):
-    # todo: define input format for models once they're actually supported
+    df["Model Offset"] = 0
 
-    # still in development. passthrough for now.
-    df["Total Modeled Projection"] = df["Total Base Projection"]
+    if models is not None:
+        for model in models:
+            print("Applying model:")
+            pp.pprint(model)
+            # todo: any better way to do this?
+            first = 1
+            for col_filter in model["cols"]:
+                pp.pprint(col_filter)
+                if "." in col_filter["value"]:
+                    idx = (df[col_filter["name"]] == df[col_filter["value"][1:]])
+                else:
+                    idx = (df[col_filter["name"]] == col_filter["value"])
+                if col_filter["invert"] == 1:
+                    idx = -idx
+                if first == 1:
+                    first = 0
+                    df_filter = idx
+                else:
+                    df_filter &= idx
+            df.loc[df_filter, "Model Offset"] += \
+                (df.loc[df_filter, "Total Modeled Projection"] *
+                (model["b1"] - 1) +
+                model["b0"])
+
+    df["Total Modeled Projection"] +=  df["Model Offset"]
+
     return df
 
 def anal_lineups(data_df, lineup_df, fom, anal_info):
@@ -186,8 +260,6 @@ def report_data(data_df, anal_res, fom, anal_info):
     # todo: don't hardcode positions
     positions = ["QB", "RB", "WR", "TE", "K", "D"]
 
-    print(stats_df)
-
     print("\n\nRelative frequencies (based on top " + str(anal_info["max_lineups"]) + " lineups):")
     stats_df.sort("Frequency", ascending=False, inplace=True)
     for pos in positions:
@@ -198,8 +270,24 @@ def report_data(data_df, anal_res, fom, anal_info):
                 str(player_info["Frequency"]))
 
     trimmed_df = trimmed_df.head(anal_info["top_lineups"])
+
+    report_cols = (
+        "QB_1",
+        "RB_1",
+        "RB_2",
+        "WR_1",
+        "WR_2",
+        "WR_3",
+        "TE_1",
+        "K_1",
+        "D_1",
+        "Total Salary",
+        "Total Base Projection",
+        "Total Modeled Projection"
+    )
+
     print("\n\nTop " + str(anal_info["top_lineups"]) + " lineups:")
-    print(trimmed_df)
+    print(trimmed_df.loc[:,report_cols])
 
 # filter data
 # todo: there's a better way to do this. but fuck it
@@ -224,6 +312,8 @@ def filter_df(df, filters):
             pos_filter &= (df["Injury Status"] != "O")
         if filters[pos]["exclude_injury"]["injured_reserve"] == 1:
             pos_filter &= (df["Injury Status"] != "IR")
+        if filters[pos]["exclude_injury"]["not_active"] == 1:
+            pos_filter &= (df["Injury Status"] != "NA")
 
         # filtered_idx is the OR of all filters
         if first == 1:
@@ -254,20 +344,40 @@ def verify_lineup(player_dict, rules, lineup):
         "K_1": lineup[4][0],
         "D_1": lineup[5][0],
         "Total Salary": 0,
-        "Total Base Projection": 0
+        "Total Base Projection": 0,
+        "Total Modeled Projection": 0
     }
+
+    # also include per-player info for lineup models
+    # using first entry in dictionary - all players have the same parameters
+    # todo: only need to do this once. determine list of column names outside
+    # of loop
+    for pos in lineup_dict.keys():
+        for param in player_dict[player_dict.keys()[1]]:
+            col_name = pos + " " + param
+            lineup_dict[col_name] = None
 
     valid_lineup = 1
     for pos in lineup_dict:
-        if pos == "Total Salary" or pos == "Total Base Projection":
+        m = re.search("_(\d)$", pos)
+        if m is None:
             continue
+        depth = m.group(1)
+
         name = lineup_dict[pos]
         lineup_dict["Total Salary"] += player_dict[name]["Salary"]
         lineup_dict["Total Base Projection"] += player_dict[name]["Base Projection"]
+        lineup_dict["Total Modeled Projection"] += player_dict[name]["Modeled Projection"]
+
         # todo: break immediately if over salary cap
         if lineup_dict["Total Salary"] > rules["cap"]:
             valid_lineup = 0
             break
+
+        # add per-player info for lineup models
+        for param in player_dict[name]:
+            col_name = pos + " " + param
+            lineup_dict[col_name] = player_dict[name][param]
 
     if valid_lineup == 1:
         # create data frame with dummy index (ignored by concat)
@@ -399,6 +509,10 @@ if __name__ == "__main__":
     # really, this is just used to trim down the dataset to be more manageable.
     data_df = filter_df(data_df, config_info["filters"])
 
+    # save data frame
+    data_df.to_csv(config_info["output"]["filenames"]["players"], index=False,
+        index_label="Name")
+
     # build permutations, generate list of "valid" lineups
     # todo: currently, a "valid" lineup is only defined as a team that is under
     # the salary cap.
@@ -410,13 +524,13 @@ if __name__ == "__main__":
 
     # anal-eyes top lineups
     res = anal_lineups(data_df, lineup_df, "Total Modeled Projection",
-        config_info["anal"])
+        config_info["output"])
 
     # report anal-isis
-    report_data(data_df, res, "Total Modeled Projection", config_info["anal"])
+    report_data(data_df, res, "Total Modeled Projection", config_info["output"])
 
     # we should really just report the sorted and trimmed lineup list
     lineup_df = res["trimmed_df"]
-    lineup_df.to_csv("/tmp/poop.csv", index=False)
+    lineup_df.to_csv(config_info["output"]["filenames"]["lineups"], index=False)
 
 

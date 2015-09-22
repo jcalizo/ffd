@@ -6,13 +6,25 @@ input:
         type: fanduel
     stats:
         Base Projection:
-            filename: /Users/jcalizo/Devel/ffd/in/fantasypros_data.csv
-            type: fantasypros
-#            filename: /Users/jcalizo/Devel/ffd/in/fanduel_data.csv
-#            type: fanduel
+#            filename: /Users/jcalizo/Devel/ffd/in/fantasypros_data.csv
+#            type: fantasypros
+            filename: /Users/jcalizo/Devel/ffd/in/fanduel_data.csv
+            type: fanduel
         Injury Status:
             filename: /Users/jcalizo/Devel/ffd/in/fanduel_data.csv
             type: fanduel
+        Team:
+            filename: /Users/jcalizo/Devel/ffd/in/fanduel_data.csv
+            type: fanduel
+        Opponent:
+            filename: /Users/jcalizo/Devel/ffd/in/fanduel_data.csv
+            type: fanduel
+output:
+    filenames:
+        players: /Users/jcalizo/Devel/ffd/out/players.csv
+        lineups: /Users/jcalizo/Devel/ffd/out/lineups.csv
+    max_lineups: 100
+    top_lineups: 5
 filters:
     QB:
         min: 5500
@@ -23,11 +35,12 @@ filters:
             questionable: 1
             out: 1
             injured_reserve: 1
+            not_active: 1
         output:
             min_base_projected: 0
             min_base_ppd: 0
-            min_modeled_projected: 15
-            min_modeled_ppd: 0.002
+            min_modeled_projected: 10
+            min_modeled_ppd: 0.001
     RB:
         min: 5000
         max: 10000
@@ -37,11 +50,12 @@ filters:
             questionable: 1
             out: 1
             injured_reserve: 1
+            not_active: 1
         output:
             min_base_projected: 0
             min_base_ppd: 0
-            min_modeled_projected: 10
-            min_modeled_ppd: 0.002
+            min_modeled_projected: 8
+            min_modeled_ppd: 0.001
     WR:
         min: 5000
         max: 10000
@@ -51,11 +65,12 @@ filters:
             questionable: 1
             out: 1
             injured_reserve: 1
+            not_active: 1
         output:
             min_base_projected: 0
             min_base_ppd: 0
-            min_modeled_projected: 10
-            min_modeled_ppd: 0.0021
+            min_modeled_projected: 6
+            min_modeled_ppd: 0.00
     TE:
         min: 2000
         max: 10000
@@ -65,11 +80,12 @@ filters:
             questionable: 1
             out: 1
             injured_reserve: 1
+            not_active: 1
         output:
             min_base_projected: 0
             min_base_ppd: 0
             min_modeled_projected: 4
-            min_modeled_ppd: 0.0022
+            min_modeled_ppd: 0.001
     K:
         min: 3000
         max: 5500
@@ -79,11 +95,12 @@ filters:
             questionable: 1
             out: 1
             injured_reserve: 1
+            not_active: 1
         output:
             min_base_projected: 0
             min_base_ppd: 0
             min_modeled_projected: 6
-            min_modeled_ppd: 0.0015
+            min_modeled_ppd: 0.001
     D:
         min: 3000
         max: 5500
@@ -93,11 +110,12 @@ filters:
             questionable: 1
             out: 1
             injured_reserve: 1
+            not_active: 1
         output:
             min_base_projected: 0
             min_base_ppd: 0
-            min_modeled_projected: 0
-            min_modeled_ppd: 0
+            min_modeled_projected: 8
+            min_modeled_ppd: 0.002
 rules:
     lineup:
         QB:
@@ -115,17 +133,100 @@ rules:
     cap: 60000
 models:
     single:
-        Position:
-            RB:
-                b1: 1.113
-                b0: 1.062
-            TE:
-                b1: 1.918
-                b0: -0.656
-            WR:
-                b1: 1.422
-                b0: 1.072
+#    -
+#        cols:
+#        -
+#            name: Position
+#            value: WR
+#            invert: 0
+#        -
+#            name: Base Projection Source
+#            value: Fanduel
+#            invert: 0
+#        b1: 1
+#        b0: 0
+#    -
+#        cols:
+#        -
+#            name: Name
+#            value: Andrew Luck
+#            invert: 1
+#        -
+#            name: Position
+#            value: QB
+#            invert: 0
+#        b1: 0
+#        b0: 0
+#    -
+#        cols:
+#        -
+#            name: Name
+#            value: Brandon Marshall
+#            invert: 0
+#        b1: 0
+#        b0: 0
     team:
-anal:
-    max_lineups: 100
-    top_lineups: 5
+    -
+        cols:
+        -
+            name: QB_1 Opponent
+            value: .D_1 Team
+            invert: 0
+        b1: 0
+        b0: 0
+    -
+        cols:
+        -
+            name: RB_1 Opponent
+            value: .D_1 Team
+            invert: 0
+        b1: 0
+        b0: 0
+    -
+        cols:
+        -
+            name: RB_2 Opponent
+            value: .D_1 Team
+            invert: 0
+        b1: 0
+        b0: 0
+    -
+        cols:
+        -
+            name: WR_1 Opponent
+            value: .D_1 Team
+            invert: 0
+        b1: 0
+        b0: 0
+    -
+        cols:
+        -
+            name: WR_2 Opponent
+            value: .D_1 Team
+            invert: 0
+        b1: 0
+        b0: 0
+    -
+        cols:
+        -
+            name: WR_3 Opponent
+            value: .D_1 Team
+            invert: 0
+        b1: 0
+        b0: 0
+    -
+        cols:
+        -
+            name: TE_1 Opponent
+            value: .D_1 Team
+            invert: 0
+        b1: 0
+        b0: 0
+    -
+        cols:
+        -
+            name: K_1 Opponent
+            value: .D_1 Team
+            invert: 0
+        b1: 0
+        b0: 0
